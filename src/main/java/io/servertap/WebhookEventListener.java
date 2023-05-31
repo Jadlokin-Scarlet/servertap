@@ -226,7 +226,7 @@ public class WebhookEventListener implements Listener {
         p.setUuid(player.getUniqueId().toString());
         p.setDisplayName(player.getDisplayName());
 
-        p.setAddress(player.getAddress().getHostName());
+//        p.setAddress(player.getAddress().getHostName());
         p.setPort(player.getAddress().getPort());
 
         p.setExhaustion(player.getExhaustion());
