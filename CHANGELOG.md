@@ -1,5 +1,60 @@
 # Changelog
 
+## v0.5.3
+
+### New Features
+
+* You can now disable swagger by setting `disable-swagger` to `true`
+in your config (default false)
+* You can now block individual paths in your config (thanks @Velyn-N)
+
+### Internals/Bugfixes
+
+* Fixed errant reverse lookup on player join (fixes #68)
+
+## v0.5.2
+
+### New Features
+
+* New endpoint: `DELETE /v1/server/whitelist` to remove someone from the
+whitelist
+
+### Internals/Bugfixes
+
+* Updated to preserve compatibility with 1.16.5 / Java 16
+
+## v0.5.1
+
+### Internals/Bugfixes
+
+* v0.5.0 was not backwards compatible and **required** Java 19, my bad.
+Now works with Java 17 thru 20.
+* Upgraded `item-nbt-api-plugin` to latest
+
+## v0.5.0
+
+### ⚠️ BREAKING CHANGES ⚠️
+
+* Gamemode, Environment/Dimension, and Difficulty now use their native
+Bukkit names
+  * e.g. in `/v1/players` instead of returning `0` for difficulty it will
+    now return `SURVIVAL`.
+* Now compiled with ☕️ **Java 19**
+
+### New Features
+
+* TLS now optionally supports Server Name Indication (SNI)
+  * Set `tls.sni` to `true` in your config to enable it (expert)
+* Player is now included in the `PlayerChatWebhookEvent` request body (#194)
+
+### Internals/Bugfixes
+
+* ServerTap is now using Javalin v5!
+* Fixed OpenApi spewing tons of WARNs into logs when viewing `/swagger` (#60)
+* Updated versions of javalin, slf4j, unirest, jackson-databind, junit
+dependencies.
+* No longer messes with ClassLoader on startup
+
 ## v0.4.0
 
 ### New Features

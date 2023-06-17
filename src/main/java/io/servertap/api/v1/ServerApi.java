@@ -1,11 +1,10 @@
 package io.servertap.api.v1;
 
-import com.google.gson.Gson;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.ServiceUnavailableResponse;
-import io.javalin.plugin.openapi.annotations.*;
+import io.javalin.openapi.*;
 import io.servertap.Constants;
 import io.servertap.Lag;
 import io.servertap.ServerExecCommandSender;
@@ -27,7 +26,6 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
@@ -130,15 +128,23 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/chat/broadcast",
-            method = HttpMethod.POST,
+            methods = {HttpMethod.POST},
             summary = "Send broadcast visible to those currently online.",
             tags = {"Chat"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "message")
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "message", type = "string")
+                                    }
+                            )
+                    }
+            ),
             responses = {
                     @OpenApiResponse(status = "200", content = @OpenApiContent(type = "application/json"))
             }
@@ -153,16 +159,24 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/chat/tell",
-            method = HttpMethod.POST,
+            methods = {HttpMethod.POST},
             summary = "Send a message to a specific player.",
             tags = {"Chat"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "message", type = String.class),
-                    @OpenApiFormParam(name = "playerUuid", type = String.class)
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "message", type = "string"),
+                                            @OpenApiContentProperty(name = "playerUuid", type = "string")
+                                    }
+                            )
+                    }
+            ),
             responses = {
                     @OpenApiResponse(status = "200", content = @OpenApiContent(type = "application/json"))
             }
@@ -285,14 +299,14 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/server/whitelist",
-            method = HttpMethod.GET,
+            methods = {HttpMethod.GET},
             summary = "Get the whitelist",
             tags = {"Server"},
             headers = {
                     @OpenApiParam(name = "key")
             },
             responses = {
-                    @OpenApiResponse(status = "200", content = @OpenApiContent(from = Whitelist.class, isArray = true))
+                    @OpenApiResponse(status = "200", content = @OpenApiContent(from = Whitelist.class))
             }
     )
     public static void whitelistGet(Context ctx) {
@@ -306,17 +320,25 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/server/whitelist",
-            method = HttpMethod.POST,
+            methods = {HttpMethod.POST},
             summary = "Update the whitelist",
             description = "Possible responses are: `success`, `failed`, `Error: duplicate entry`, and `No whitelist`.",
             tags = {"Server"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "uuid", type = String.class),
-                    @OpenApiFormParam(name = "name", type = String.class)
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "uuid", type = "string"),
+                                            @OpenApiContentProperty(name = "name", type = "string")
+                                    }
+                            )
+                    }
+            ),
             responses = {
                     @OpenApiResponse(status = "200", content = @OpenApiContent(type = "application/json"))
             }
@@ -386,16 +408,105 @@ public class ServerApi {
     }
 
     @OpenApi(
+            path = "/v1/server/whitelist",
+            methods = {HttpMethod.DELETE},
+            summary = "Delete specific player from the whitelist",
+            tags = {"Server"},
+            headers = {
+                    @OpenApiParam(name = "key")
+            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "uuid", type = "string"),
+                                            @OpenApiContentProperty(name = "name", type = "string")
+                                    }
+                            )
+                    }
+            ),
+            responses = {@OpenApiResponse(status = "200")}
+    )
+    public static void whitelistDelete(Context ctx) {
+        final org.bukkit.Server bukkitServer = Bukkit.getServer();
+        if (!bukkitServer.hasWhitelist()) {
+            ctx.json("No whitelist");
+            return;
+        }
+
+        String uuid = ctx.formParam("uuid");
+        String name = ctx.formParam("name");
+
+        if (uuid == null && name == null) {
+            throw new BadRequestResponse(Constants.WHITELIST_MISSING_PARAMS);
+        }
+
+        //Check Mojang API for missing param
+        if (uuid == null) {
+            try {
+                uuid = MojangApiService.getUuid(name);
+            } catch (IllegalArgumentException ignored) {
+                throw new NotFoundResponse(Constants.WHITELIST_NAME_NOT_FOUND);
+            } catch (IOException ignored) {
+                throw new ServiceUnavailableResponse(Constants.WHITELIST_MOJANG_API_FAIL);
+            }
+        } else if (name == null) {
+            try {
+                List<NameChange> nameHistory = MojangApiService.getNameHistory(uuid);
+                name = nameHistory.get(nameHistory.size() - 1).getName();
+            } catch (IllegalArgumentException ignored) {
+                throw new NotFoundResponse(Constants.WHITELIST_UUID_NOT_FOUND);
+            } catch (IOException ignored) {
+                throw new ServiceUnavailableResponse(Constants.WHITELIST_MOJANG_API_FAIL);
+            }
+        }
+
+        //Whitelist file doesn't accept UUIDs without dashes
+        uuid = uuid.replaceAll("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5");
+
+        final File directory = new File("./");
+        Set<Whitelist> whitelist = getWhitelist();
+
+        String finalUuid = uuid;
+        whitelist.removeIf(entry -> entry.getUuid().toLowerCase().equals(finalUuid));
+
+        final String json = GsonSingleton.getInstance().toJson(whitelist);
+        try {
+            final String path = Paths.get(directory.getAbsolutePath(), "whitelist.json").toString();
+            final File myObj = new File(path);
+            final FileWriter whitelistFile = new FileWriter(myObj);
+            whitelistFile.write(json);
+            whitelistFile.close();
+            bukkitServer.reloadWhitelist();
+            ctx.json("success");
+        } catch (final IOException e) {
+            log.warning("An error occurred updating whitelist.");
+            e.printStackTrace();
+            ctx.json("failed");
+        }
+    }
+
+    @OpenApi(
             path = "/v1/server/ops",
-            method = HttpMethod.POST,
+            methods = {HttpMethod.POST},
             summary = "Sets a specific player to Op",
             tags = {"Player"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "playerUuid"),
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "playerUuid", type = "string")
+                                    }
+                            )
+                    }
+            ),
             responses = {
                     @OpenApiResponse(status = "200")
             })
@@ -419,15 +530,23 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/server/ops",
-            method = HttpMethod.DELETE,
+            methods = {HttpMethod.DELETE},
             summary = "Removes Op from a specific player",
             tags = {"Player"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "playerUuid")
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "playerUuid", type = "string")
+                                    }
+                            )
+                    }
+            ),
             responses = {@OpenApiResponse(status = "200")}
     )
     public static void deopPlayer(Context ctx) {
@@ -450,7 +569,7 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/server/ops",
-            method = HttpMethod.GET,
+            methods = {HttpMethod.GET},
             summary = "Get all op players",
             tags = {"Player"},
             headers = {
@@ -459,7 +578,10 @@ public class ServerApi {
             responses = {
                     @OpenApiResponse(
                             status = "200",
-                            content = @OpenApiContent(from = io.servertap.api.v1.models.OfflinePlayer.class, isArray = true))
+                            content = @OpenApiContent(
+                                    from = io.servertap.api.v1.models.OfflinePlayer.class
+                            )
+                    )
             }
     )
     public static void getOps(Context ctx) {
@@ -489,17 +611,25 @@ public class ServerApi {
 
     @OpenApi(
             path = "/v1/server/exec",
-            method = HttpMethod.POST,
+            methods = {HttpMethod.POST},
             summary = "Executes a command on the server from the console, returning it's output. Be aware that not all " +
                     "command executors will properly send their messages to the CommandSender, though, most do.",
             tags = {"Server"},
             headers = {
                     @OpenApiParam(name = "key")
             },
-            formParams = {
-                    @OpenApiFormParam(name = "command", required = true),
-                    @OpenApiFormParam(name = "time", type = Long.class)
-            },
+            requestBody = @OpenApiRequestBody(
+                    required = true,
+                    content = {
+                            @OpenApiContent(
+                                    mimeType = "application/x-www-form-urlencoded",
+                                    properties = {
+                                            @OpenApiContentProperty(name = "command", type = "string"),
+                                            @OpenApiContentProperty(name = "time", type = "long")
+                                    }
+                            )
+                    }
+            ),
             responses = {
                     @OpenApiResponse(
                             status = "200"
@@ -513,20 +643,29 @@ public class ServerApi {
         }
 
         String timeRaw = ctx.formParam("time");
-        AtomicLong time = new AtomicLong(timeRaw != null ? Long.parseLong(timeRaw) : 0);
+        if (StringUtils.isBlank(timeRaw)) {
+            timeRaw = "0";
+        }
+
+        AtomicLong time = new AtomicLong(Long.parseLong(timeRaw));
         if (time.get() < 0) time.set(0);
 
-        ctx.future(CompletableFuture.supplyAsync(() -> {
-            CompletableFuture<String> future = new ServerExecCommandSender().executeCommand(command, time.get(), TimeUnit.MILLISECONDS);
-            try {
-                String output = future.get();
-                Gson g = GsonSingleton.getInstance();
+        ctx.future(() -> runCommandAsync(command, time.get()).thenAccept(
+                        output -> {
+                            if ("application/json".equalsIgnoreCase(ctx.contentType())) {
+                                ctx.json(output);
+                            } else {
+                                ctx.html(output);
+                            }
+                        }
+                )
+                .exceptionally(throwable -> {
+                    throw new RuntimeException(throwable);
+                }));
+    }
 
-                return "application/json".equalsIgnoreCase(ctx.contentType()) ? g.toJson(output) : output;
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
-        }));
+    private static CompletableFuture<String> runCommandAsync(String command, long time) {
+        return new ServerExecCommandSender().executeCommand(command, time, TimeUnit.MILLISECONDS);
     }
 
 }
