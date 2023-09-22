@@ -1,8 +1,7 @@
-package io.servertap.api.v1.websockets;
+package io.servertap.utils;
 
-import io.servertap.PluginEntrypoint;
+import io.servertap.ServerTapMain;
 import io.servertap.api.v1.models.ConsoleLine;
-import io.servertap.api.v1.websockets.WebsocketHandler;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.core.Filter;
@@ -10,18 +9,22 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.message.Message;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
 public class ConsoleListener implements Filter {
+    private final ServerTapMain plugin;
+    private final List<Consumer<ConsoleLine>> listeners = new ArrayList<>();
 
-    private PluginEntrypoint plugin;
-
-    public ConsoleListener(PluginEntrypoint plugin) {
-        this.plugin = plugin;
+    public ConsoleListener(ServerTapMain main) {
+        this.plugin = main;
     }
 
     @Override
     public Result filter(LogEvent logEvent) {
-        if (plugin.maxConsoleBufferSize > 0 && plugin.consoleBuffer.size() >= plugin.maxConsoleBufferSize) {
-            plugin.consoleBuffer.remove(0);
+        if (plugin.getMaxConsoleBufferSize() > 0 && plugin.getConsoleBuffer().size() >= plugin.getMaxConsoleBufferSize()) {
+            plugin.getConsoleBuffer().remove(0);
         }
 
         ConsoleLine line = new ConsoleLine();
@@ -31,13 +34,21 @@ public class ConsoleListener implements Filter {
         line.setMessage(logEvent.getMessage().getFormattedMessage());
         line.setLoggerName(logEvent.getLoggerName());
 
-        if (plugin.maxConsoleBufferSize > 0) {
-            plugin.consoleBuffer.add(line);
+        if (plugin.getMaxConsoleBufferSize() > 0) {
+            plugin.getConsoleBuffer().add(line);
         }
 
-        WebsocketHandler.broadcast(line);
+        listeners.forEach(consoleLineConsumer -> consoleLineConsumer.accept(line));
 
         return Result.NEUTRAL;
+    }
+
+    public void addListener(Consumer<ConsoleLine> consoleLineConsumer) {
+        listeners.add(consoleLineConsumer);
+    }
+
+    public void resetListeners() {
+        listeners.clear();
     }
 
     @Override

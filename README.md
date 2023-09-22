@@ -3,7 +3,7 @@
 <a href="https://github.com/phybros/servertap/actions/workflows/build.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/phybros/servertap/build.yml?branch=main"></a>
 <img alt="bukkit version %3E%3D 1.16" src="https://img.shields.io/badge/bukkit%20version-%3E%3D1.16-brightgreen">
 <img alt="GitHub all releases" src="https://img.shields.io/github/downloads/phybros/servertap/total?color=brightgreen">
-<a href="https://discord.gg/fefHbTFAkj"><img src="https://img.shields.io/discord/919982507271802890?logo=discord&label=discord&color=brightgreen" alt="chat on Discord"></a>
+<a href="https://discord.gg/nSWRYzBMfp"><img src="https://img.shields.io/discord/919982507271802890?logo=discord&label=discord&color=brightgreen" alt="chat on Discord"></a>
 
 ServerTap is a REST API for Bukkit, Spigot, and PaperMC Minecraft servers. It
 allows for server admins to query and interact with their servers using
@@ -13,11 +13,15 @@ Head over to https://github.com/phybros/servertap/releases/latest to grab the la
 
 # Discord
 
-Join the Discord to talk about this plugin https://discord.gg/fefHbTFAkj 
+Join the Discord to talk about this plugin https://discord.gg/nSWRYzBMfp
+
+**Note:** If you have a question please post in the support forum on our discord instead of just asking in general chat.
+This helps us keep track of issues and questions more effectively and answer your questions quicker.
 
 # Contents
 
 - [Usage](#usage)
+- [ServerTap Command](#servertap-command)
 - [Current Endpoints](#current-endpoints)
 - [TLS](#tls)
 - [Authentication](#authentication)
@@ -25,14 +29,13 @@ Join the Discord to talk about this plugin https://discord.gg/fefHbTFAkj
 - [Webhooks](#webhooks)
 - [Websockets](#websockets)
   - [Authenticating Websockets](#authenticating-websockets)
-- [Developing](#developing)
+- [Using the Developer API](#using-the-developer-api)
+- [Contributing to ServerTap](#contributing-to-servertap)
 
 # Usage
 
 Install this plugin by dropping the jar into the `plugins/` directory on your
-server.
-
-Then, you can query the server using `curl` or Postman, or anything that speaks
+server. Then, you can query the server using `curl` or Postman, or anything that speaks
 HTTP.
 
 For example, query for information about the server itself:
@@ -85,6 +88,12 @@ $ curl http://localhost:4567/v1/players
   }
 ]
 ```
+# ServerTap Command
+
+ServerTap currently supports only one management command in game. The supported subcommands are `reload` & `info`
+which as their names imply let you reload and display basic information about the plugin (version, author, etc).
+
+**Note**: The Permission for the `/servertap` Command is `servertap.admin`.
 
 # Current Endpoints
 
@@ -265,6 +274,48 @@ this.ws.onopen = function() {
 ```
 
 ### Note: If you don't have authentication enabled, you are basically opening a remote admin console to your server up to the internet (bad idea).
+
+# Using the Developer API
+
+ServerTap provides a Developer API allowing you to register your own Request Handlers and Websockets from your Plugin!
+
+To get ServerTap Builds you can use [Jitpack](https://jitpack.io). First, add the Jitpack Repository to your `pom.xml`:
+```xml
+<repository>
+  <id>jitpack.io</id>
+  <url>https://jitpack.io</url>
+</repository>
+```
+Then you can add the following Dependency:
+```xml
+<dependency>
+  <groupId>com.github.phybros</groupId>
+  <artifactId>servertap</artifactId>
+  <version>vX.X.X</version>
+  <scope>provided</scope>
+</dependency>
+```
+Replace the Version with the latest available Releases Version Number.
+
+You can retrieve the API using Bukkits ServiceProvider:
+```java
+// In your Main Class extended from JavaPlugin, for example in the onEnable() Method
+ServerTapWebserverService webserverService = this.getServer().getServicesManager().load(ServerTapWebserverService.class);
+```
+
+The Interface provides you with methods to directly add Endpoints to the Webserver:
+```java
+webserverService.get("/test/ping", ctx -> ctx.status(200).result("Pong!"));
+webserverService.websocket("/test/ws", websocketConfig -> {
+    websocketConfig.onMessage(wsMessageContext -> System.out.println(wsMessageContext.message()));
+});
+```
+Your Endpoints (HTTP & WebSocket) are protected the same way all other Endpoints in the Server are.
+
+The API provides the `getWebserver()` Method that will return the internal [Javalin](https://javalin.io) Instance.
+This will give you deep access to the Webserver providing you every ability possible.
+Be careful not to break ServerTaps Functionality (e.g. the AccessManager checking Security)!
+Use this only if necessary.
 
 # Contributing to ServerTap
 
